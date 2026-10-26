@@ -2,7 +2,7 @@
 
 A Home Assistant dashboard card (`custom:etsy-orders-card`) that shows open Etsy orders as order cards, most urgent
 first, with thumbnails, variations, personalization, ship-by urgency and Made checkboxes. It reads the Open orders
-sensors of the [Etsy Shop Manager integration](https://github.com/TopHATTwaffle/Etsy-Shop-Manager-HA).
+sensors of the [Etsy Shop Manager integration](https://github.com/tophattwaffle/Etsy-Shop-Manager-HA).
 
 All options are described at the top of `etsy-orders-card.js`.
 
@@ -10,7 +10,7 @@ All options are described at the top of `etsy-orders-card.js`.
 
 Copy `etsy-orders-card.js` to Home Assistant's `config/www/` folder and add it as a dashboard resource
 (`/local/etsy-orders-card.js?v=<version>`, type *JavaScript module*). Bump `?v=` on every update so browsers load
-the new file. HACS can also install it from the GitHub copy of this repository (category *Dashboard*).
+the new file. HACS can also install it from `https://github.com/tophattwaffle/Etsy-Shop-Manager-HA-Card` (custom repository, category *Dashboard*), which adds the resource itself.
 
 ## Use
 

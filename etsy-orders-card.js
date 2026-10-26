@@ -1,11 +1,11 @@
-// etsy-orders-card v2.9.2 — open Etsy orders as order cards, most urgent first.
+// etsy-orders-card v3.0.0 — open Etsy orders as order cards, most urgent first.
 //
-// Reads the `open_orders` / `total_items_needed` attributes of Etsy open-order
-// sensors. The color list (`colors`, `metallic`, `random_words`) comes from the
-// Etsy Shop Manager app (Settings -> Order colors) through the sensors'
-// `color_config` attribute; any of those set here are merged on top of it.
-// The coloring engine (EtsyOrderColors) is shared with the app's Orders page,
-// which loads this same file. Config:
+// Reads the `open_orders` / `total_items_needed` attributes of the Etsy Shop
+// Manager integration's open-order sensors. Order colors are the app's job
+// (Settings -> Order colors): each variation and personalization arrives
+// already drawn (`paint`, `personalization_paint`), with the styles in the
+// sensors' `color_config.css`, so the card colors exactly like the app's
+// Orders page and has no color options of its own. Config:
 //   shops:             list of { entity, name?, icon? (emoji or text),
 //                      order_url? (desktop-only override of order_url),
 //                      accent? ("#hex" outline for this shop's orders; default
@@ -31,294 +31,19 @@
 //   red_hours:         ...and fully red at this many hours or fewer, blending
 //                      green → yellow → red in between; below it the whole
 //                      order card is tinted red (default 12)
-//   colors:            color names for tinting variation and personalization
-//                      boxes, added to the app's list (same name: this wins), as { "Name": "#hex" } or
-//                      { "Name": ["#hex", "#hex"] } for multi-color filaments.
-//                      CSS color names (black, purple, dark green, …) are
-//                      recognised without being listed; several colors in one
-//                      box fade from one to the next in the order written.
-//   color_tint:        strength (%) of that tint; 0 turns coloring off (default 35)
-//   metallic:          color names (keys of `colors`, or CSS names) that get a
-//                      metal effect over their part of a box: a bevel sheen and
-//                      a glint of light sweeping across (default: the app's list,
-//                      else ["Copper"])
-//   metallic_shine:    strength (%) of that sheen and glint; 0 turns it off
-//                      (default 60)
-//   animate_metallic:  the glint sweeps across every few seconds (default true;
-//                      paused and off like animate_random)
-//   random_words:      words or phrases that mark a "random color" choice; such
-//                      boxes get the random_style effect in colors drawn from
-//                      `colors` (default: the app's list, else ["random"])
-//   random_style:      "lava" (soft blobs drifting like a lava lamp) or
-//                      "confetti" (falling dots) (default "lava")
-//   random_min_brightness: 0–100; `colors` darker than this (by their brightest
-//                      channel) are left out of the random effect, along with
-//                      greys, muddy browns and near-whites (default 60)
-//   animate_random:    the effect moves and the background and outline drift
-//                      through their colors (default true; paused while the
-//                      window is unfocused or hidden, off when the device asks
-//                      for reduced motion)
 //   order_url:         link for each order; "{receipt_id}" is substituted
 //                      (default Etsy's sold-orders page). Set false to disable.
 //                      A non-http scheme (e.g. "microsoft-edge:https://…")
 //                      hands the link to another browser via the OS.
+// Animations in the app's color styles (metal glints, random effects) pause
+// while the window is unfocused or hidden, and don't run when the device asks
+// for reduced motion.
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const shortTitle = (t) => String(t || "").split("|")[0].trim();
 // The app's brand mark (Material "storefront", as in its top bar), for "All shops" in the combined view's shop picker.
 const STOREFRONT = `<svg class="storefront" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.9,8.89l-1.05-4.37c-0.22-0.9-1-1.52-1.91-1.52H5.05C4.15,3,3.36,3.63,3.15,4.52L2.1,8.89 c-0.24,1.02-0.02,2.06,0.62,2.88C2.8,11.88,2.91,11.96,3,12.06V19c0,1.1,0.9,2,2,2h14c1.1,0,2-0.9,2-2v-6.94 c0.09-0.09,0.2-0.18,0.28-0.28C21.92,10.96,22.15,9.91,21.9,8.89z M18.91,4.99l1.05,4.37c0.1,0.42,0.01,0.84-0.25,1.17 C19.57,10.71,19.27,11,18.77,11c-0.61,0-1.14-0.49-1.21-1.14L16.98,5L18.91,4.99z M13,5h1.96l0.54,4.52 c0.05,0.39-0.07,0.78-0.33,1.07C14.95,10.85,14.63,11,14.22,11C13.55,11,13,10.41,13,9.69V5z M8.49,9.52L9.04,5H11v4.69 C11,10.41,10.45,11,9.71,11c-0.34,0-0.65-0.15-0.89-0.41C8.57,10.3,8.45,9.91,8.49,9.52z M4.04,9.36L5.05,5h1.97L6.44,9.86 C6.36,10.51,5.84,11,5.23,11c-0.49,0-0.8-0.29-0.93-0.47C4.03,10.21,3.94,9.78,4.04,9.36z M5,19v-6.03C5.08,12.98,5.15,13,5.23,13 c0.87,0,1.66-0.36,2.24-0.95c0.6,0.6,1.4,0.95,2.31,0.95c0.87,0,1.65-0.36,2.23-0.93c0.59,0.57,1.39,0.93,2.29,0.93 c0.84,0,1.64-0.35,2.24-0.95c0.58,0.59,1.37,0.95,2.24,0.95c0.08,0,0.15-0.02,0.23-0.03V19H5z"/></svg>`;
 const isAndroid = () => typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent || "");
-const words = (s) => String(s || "").toLowerCase().match(/[a-z]+/g) || [];
-const CSS_KEYWORDS = new Set(["inherit", "initial", "unset", "revert", "currentcolor", "transparent"]);
-const isCssColor = (w) => /^[a-z]{3,}$/.test(w) && !CSS_KEYWORDS.has(w) && typeof CSS !== "undefined" && CSS.supports("color", w);
-const RAINBOW = ["#e53935", "#fb8c00", "#fdd835", "#43a047", "#1e88e5", "#8e24aa"];
-// Brightness (HSV value: the brightest channel), saturation and perceived lightness, each 0–1,
-// of a #rrggbb color. Anything else (CSS names) passes as bright, vivid and mid-light.
-const tone = (col) => {
-  const m = /^#([0-9a-f]{6})$/i.exec(col);
-  if (!m) return { v: 1, s: 1, luma: 0.5 };
-  const n = parseInt(m[1], 16);
-  const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255].map((x) => x / 255);
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  return { v: max, s: max ? (max - min) / max : 0, luma: 0.299 * r + 0.587 * g + 0.114 * b };
-};
-// Seeded PRNG, so a "random" box keeps the same pattern on every re-render.
-const rng = (seed) => {
-  let h = 2166136261;
-  for (const ch of String(seed)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
-  return () => {
-    h = Math.imul(h ^ (h >>> 15), 2246822507);
-    h = Math.imul(h ^ (h >>> 13), 3266489909);
-    return ((h ^= h >>> 16) >>> 0) / 4294967296;
-  };
-};
-
-// The coloring engine: tints variation pills and personalization notes by the colors they name, with
-// metal and "random" effects. Shared with the Etsy Shop Manager app (its Orders page loads this file and
-// uses window.EtsyOrderColors), so both always color the same way. `base` is the background the tints are
-// mixed with.
-class EtsyOrderColors {
-  static DEFAULTS = {
-    colors: {},
-    color_tint: 35,
-    metallic: ["Copper"],
-    metallic_shine: 60,
-    animate_metallic: true,
-    random_words: ["random"],
-    random_style: "lava",
-    random_min_brightness: 60,
-    animate_random: true,
-  };
-
-  constructor(config, base = "var(--ha-card-background, var(--card-background-color, #fff))") {
-    this.c = { ...EtsyOrderColors.DEFAULTS, ...config };
-    this.base = base;
-    // Color names are matched word by word, so "Dark  Green!" finds the key "dark green".
-    this._colorMap = new Map(Object.entries(this.c.colors || {}).map(([k, v]) => [words(k).join(" "), [].concat(v).map(String)]));
-    this._colorMaxWords = Math.max(3, ...[...this._colorMap.keys()].map((k) => k.split(" ").length));
-    this._metallic = new Set([].concat(this.c.metallic || []).map((w) => words(w).join(" ")).filter(Boolean));
-    // The random effects skip dark colors, dull greys and browns (both look muddy) and near-whites
-    // (which vanish on a light theme); vivid colors stay even when they read darkish, like a deep red.
-    const minV = Number(this.c.random_min_brightness) / 100;
-    const palette = [...new Set([...this._colorMap.values()].flat())].filter((col) => {
-      const { v, s, luma } = tone(col);
-      return v >= minV && !(s < 0.3 && v < 0.8) && luma < 0.9;
-    });
-    this._palette = palette.length ? palette : RAINBOW;
-    this._randomWords = [].concat(this.c.random_words || []).map((w) => words(w).join(" ")).filter(Boolean);
-  }
-
-  // The shared color list (from the app, via a sensor's `color_config` attribute) with the card's own
-  // settings on top: `colors` entries are merged by name, other keys replace the shared ones.
-  static merge(shared, own) {
-    const out = { ...(shared || {}) };
-    for (const [k, v] of Object.entries(own || {})) {
-      out[k] = k === "colors" ? { ...(out.colors || {}), ...(v || {}) } : v;
-    }
-    return out;
-  }
-
-  // How to draw a box of `text`: { cls: extra classes ("" when uncolored), style, inner (HTML before the
-  // text) }. A "random" choice gets the random effect, seeded by `seed` so it stays put between renders.
-  box(text, seed, small) {
-    const fx = this.isRandom(text) ? this.randomFx(`${seed}|${text}`, small) : null;
-    if (fx) return { cls: ` colored random ${fx.kind}${this.c.animate_random ? "" : " still"}`, style: fx.style, inner: fx.inner };
-    const groups = this.colorsIn(text);
-    const metal = this.metalStyle(groups);
-    const style = this.colorStyle(groups) + (metal ? ` ${metal}` : "");
-    if (!style) return { cls: "", style: "", inner: "" };
-    const multi = groups.some((g) => g.length > 1) ? " multi" : "";
-    return { cls: ` colored${multi}${metal ? ` metal${this.c.animate_metallic ? "" : " still"}` : ""}`, style, inner: "" };
-  }
-
-  // Colors named in free text, in the order written: the `colors` map first
-  // (longest name wins), then CSS color names, joining words ("Dark Green" → darkgreen).
-  // Each name is one group, so a multi-color filament stays together: [["black"], ["#4fc3f7", "#ff1fd1"]].
-  // A group named in `metallic` carries metal: true.
-  colorsIn(text) {
-    const w = words(text);
-    const out = [];
-    for (let i = 0; i < w.length; ) {
-      let used = 1;
-      for (let n = Math.min(this._colorMaxWords, w.length - i); n > 0; n--) {
-        const parts = w.slice(i, i + n);
-        const cols = this._colorMap.get(parts.join(" ")) || (isCssColor(parts.join("")) ? [parts.join("")] : null);
-        if (cols) {
-          const hit = Object.assign([...cols], { metal: this._metallic.has(parts.join(" ")) });
-          if (out[out.length - 1]?.join() !== hit.join()) out.push(hit);
-          used = n;
-          break;
-        }
-      }
-      i += used;
-    }
-    return out;
-  }
-
-  // A tinted fill fading through the colors, with a full-strength outline in the same colors.
-  // Each named color gets an equal share of the width, with its stop at the middle of its share so
-  // neighbours fade into each other. A multi-color filament stacks its colors top to bottom over its
-  // share instead (see multiStyle): "Black base, Neon Rider pattern" is half black, then light blue over
-  // magenta. The fill is mixed with the background so it stays opaque over the outline layer.
-  colorStyle(groups) {
-    const t = Number(this.c.color_tint);
-    if (!groups.length || !(t > 0)) return "";
-    // In the left-to-right blend a filament counts as the mix of its top and bottom colors.
-    const stops = groups.map((g, gi) => [g.length > 1 ? `color-mix(in srgb, ${g[0]}, ${g[g.length - 1]})` : g[0], ((gi + 0.5) / groups.length) * 100]);
-    if (stops.length === 1) stops.splice(0, 1, [stops[0][0], 0], [stops[0][0], 100]);
-    const grad = (fn) => `linear-gradient(90deg, ${stops.map(([col, p]) => `${fn(col)} ${p.toFixed(1)}%`).join(", ")})`;
-    const tint = (col) => `color-mix(in srgb, ${col} ${Math.min(100, t)}%, ${this.base})`;
-    return `background: ${grad(tint)} padding-box, ${grad((col) => col)} border-box; border-color: transparent;${this.multiStyle(groups, tint)}`;
-  }
-
-  // The stacked layer (.multi::before) for multi-color filaments: each one's colors run top to bottom over
-  // its share of the box, tinted inside and full strength on the outline, fading in from its neighbours at
-  // the sides. "" when no group has more than one color.
-  multiStyle(groups, tint) {
-    if (!groups.some((g) => g.length > 1)) return "";
-    const share = 100 / groups.length;
-    // Background-position percentages are of (box - layer), so this puts the layer's left edge at gi * share.
-    const at = (gi) => `${(share >= 100 ? 0 : ((gi * share) / (100 - share)) * 100).toFixed(1)}% 0 / ${share.toFixed(1)}% 100% no-repeat`;
-    const multis = groups.map((g, gi) => [g, gi]).filter(([g]) => g.length > 1);
-    const layer = (fn, box) => multis.map(([g, gi]) => `linear-gradient(180deg, ${g.map(fn).join(", ")}) ${at(gi)} ${box}`);
-    return ` --multi: ${[...layer(tint, "padding-box"), ...layer((col) => col, "border-box")].join(", ")}; --multi-mask: ${this.shareMask(groups, (g) => g.length > 1)};`;
-  }
-
-  // A left-to-right mask that is opaque over the shares of the groups `pick` selects and transparent
-  // elsewhere, fading where a picked share meets another color (not at the box's own edges); "none"
-  // when every group is picked.
-  shareMask(groups, pick) {
-    if (groups.every(pick)) return "none";
-    const share = 100 / groups.length;
-    const fade = share / 4;
-    const stops = groups.flatMap((g, gi) => {
-      if (!pick(g)) return [];
-      const [a, b] = [gi * share, (gi + 1) * share];
-      const from = a > 0 ? [`transparent ${a.toFixed(1)}%`, `#000 ${(a + fade).toFixed(1)}%`] : ["#000 0%"];
-      const to = b < 100 ? [`#000 ${(b - fade).toFixed(1)}%`, `transparent ${b.toFixed(1)}%`] : ["#000 100%"];
-      return [...from, ...to];
-    });
-    return `linear-gradient(90deg, ${stops.join(", ")})`;
-  }
-
-  // The metal layer (.metal::after) over the metallic groups' shares of the box, or "" when none.
-  // A mask fades it in and out at the edges of those shares, so in "Black & Copper" only the
-  // copper half shines; when every group is metallic the whole box does.
-  metalStyle(groups) {
-    const shine = Number(this.c.metallic_shine);
-    if (!(shine > 0) || !(Number(this.c.color_tint) > 0) || !groups.some((g) => g.metal)) return "";
-    return `--shine: ${Math.min(100, shine) / 100}; --metal-mask: ${this.shareMask(groups, (g) => g.metal)};`;
-  }
-
-  isRandom(text) {
-    const s = ` ${words(text).join(" ")} `;
-    return this._randomWords.some((w) => s.includes(` ${w} `));
-  }
-
-  // A "random" box: colors drawn from the palette. Behind the effect is a slow drift through tinted
-  // palette colors (mixed with the background, so opaque and readable), and around it a
-  // multicolor outline. Both are horizontal tiles sized in pixels rather than box widths, so a small
-  // pill and a wide note show the same colors per inch; each tile ends on its first color, so sliding
-  // it a whole tile loops seamlessly. Returns { kind, style, inner } or null when coloring is off.
-  randomFx(seed, small) {
-    const t = Number(this.c.color_tint);
-    if (!(t > 0)) return null;
-    const r = rng(seed);
-    const pick = () => this._palette[Math.floor(r() * this._palette.length)];
-    const loop = (cols) => [...cols, cols[0]].join(", ");
-    const wash = Array.from({ length: 4 }, pick).map((col) => `color-mix(in srgb, ${col} ${Math.min(100, t + 10)}%, ${this.base})`);
-    const ring = Array.from({ length: 5 }, pick);
-    const frame = `background: linear-gradient(90deg, ${loop(wash)}) padding-box, linear-gradient(90deg, ${loop(ring)}) border-box; background-size: 480px 100%, 240px 100%; border-color: transparent;`;
-
-    if (this.c.random_style === "confetti") {
-      // Dots go in --confetti for the .confetti::before layer, which tiles them vertically so they
-      // can fall in a seamless loop (dots stay off the tile edges so none pop at the seam).
-      const [dots, maxSize] = small ? [9, 1.8] : [27, 3];
-      const strength = Math.min(100, t + 40);
-      const confetti = Array.from({ length: dots }, () => {
-        const size = maxSize / 2 + (r() * maxSize) / 2;
-        const at = `${Math.round(r() * 100)}% ${Math.round(10 + r() * 80)}%`;
-        return `radial-gradient(circle at ${at}, color-mix(in srgb, ${pick()} ${strength}%, transparent) ${size.toFixed(1)}px, transparent ${(size + 0.8).toFixed(1)}px)`;
-      });
-      return { kind: "confetti", style: `--confetti: ${confetti.join(", ")}; ${frame}`, inner: "" };
-    }
-
-    // Lava lamp: a few soft blobs spread across the box, each drifting and swelling on its own
-    // path and pace. The soft edges come from the gradient itself, so the motion is transform-only.
-    const n = small ? 3 : 4;
-    const strength = Math.min(100, t + 30);
-    const blobs = Array.from({ length: n }, (_, k) => {
-      const x = Math.round(((k + 0.2 + r() * 0.6) / n) * 100);
-      const y = Math.round(25 + r() * 50);
-      const d = [10, 12, 15, 20][Math.floor(r() * 4)];
-      const style = `left: ${x}%; top: ${y}%; --c: color-mix(in srgb, ${pick()} ${strength}%, transparent); --d: ${d}s; --k: lava-${(k % 4) + 1}`;
-      return `<i class="blob" style="${esc(style)}"></i>`;
-    });
-    return { kind: "lava", style: frame, inner: blobs.join("") };
-  }
-
-  // The styles behind .colored, .random and .metal boxes (pills use .var, notes .note). Animations use
-  // var(--phase) so a re-render continues them where they were.
-  static CSS = `
-        .var.colored { color: var(--primary-text-color); font-weight: 500; }
-        .note.colored { border-width: 1px 1px 1px 4px; border-style: solid; }
-        /* Multi-color filaments: their colors stacked top to bottom (--multi), over the base blend and under the
-           text, covering the outline too; --multi-mask limits them to their share of the box. */
-        .multi { position: relative; isolation: isolate; }
-        .multi::before { content: ""; position: absolute; inset: -1px; z-index: -1; pointer-events: none; border-radius: inherit;
-                         border: 1px solid transparent; background: var(--multi);
-                         -webkit-mask-image: var(--multi-mask); mask-image: var(--multi-mask); }
-        .note.multi::before { inset: -1px -1px -1px -4px; border-width: 1px 1px 1px 4px; }
-        .random { position: relative; overflow: hidden; isolation: isolate; animation: random-drift 48s linear infinite var(--phase, 0ms); }
-        .confetti::before { content: ""; position: absolute; left: 0; right: 0; top: -100%; height: 200%; z-index: -1; pointer-events: none;
-                            background: var(--confetti); background-size: 100% 50%; animation: confetti-fall 4s linear infinite var(--phase, 0ms); }
-        .blob { position: absolute; z-index: -1; pointer-events: none; width: 70%; height: 300%; translate: -50% -50%; border-radius: 50%;
-                background: radial-gradient(closest-side, var(--c) 25%, transparent);
-                animation: var(--k) var(--d) ease-in-out infinite alternate var(--phase, 0ms); }
-        .random.still, .random.still::before, .random.still .blob { animation: none; }
-        @keyframes confetti-fall { to { transform: translateY(50%); } }
-        /* Per cycle the background moves one 480px tile and the outline two 240px tiles. */
-        @keyframes random-drift { to { background-position: 480px 0, 480px 0; } }
-        @keyframes lava-1 { from { transform: translate(-40%, -15%) scale(0.9); } to { transform: translate(45%, 20%) scale(1.25); } }
-        @keyframes lava-2 { from { transform: translate(35%, 20%) scale(1.2); } to { transform: translate(-45%, -20%) scale(0.85); } }
-        @keyframes lava-3 { from { transform: translate(-20%, 25%) scale(1); } to { transform: translate(30%, -25%) scale(1.3); } }
-        @keyframes lava-4 { from { transform: translate(25%, -25%) scale(1.15); } to { transform: translate(-35%, 15%) scale(0.9); } }
-        /* Metal: a bevel (light top edge, darker band below the middle) and a glint that sweeps
-           left to right in the first third of each cycle. The layer covers the border too and sits
-           under the text; the glint is a 300%-wide tile, off the box at either end position. */
-        .metal { position: relative; isolation: isolate; }
-        .metal::after { content: ""; position: absolute; inset: -1px; z-index: -1; pointer-events: none; border-radius: inherit;
-                        background: linear-gradient(105deg, transparent 43%, rgba(255, 255, 255, calc(var(--shine) * 0.95)) 50%, transparent 57%) 100% 0 / 300% 100% no-repeat,
-                                    linear-gradient(180deg, rgba(255, 255, 255, calc(var(--shine) * 0.5)), rgba(255, 255, 255, 0) 42%,
-                                                    rgba(0, 0, 0, calc(var(--shine) * 0.22)) 58%, rgba(255, 255, 255, calc(var(--shine) * 0.18)));
-                        -webkit-mask-image: var(--metal-mask); mask-image: var(--metal-mask);
-                        animation: metal-glint 6s ease-in-out infinite var(--phase, 0ms); }
-        .note.metal::after { inset: -1px -1px -1px -4px; }
-        .metal.still::after { animation: none; }
-        @keyframes metal-glint { 0% { background-position: 100% 0, 0 0; } 33%, 100% { background-position: 0% 0, 0 0; } }`;
-}
-window.EtsyOrderColors = EtsyOrderColors;
 
 class EtsyOrdersCard extends HTMLElement {
   setConfig(config) {
@@ -336,9 +61,7 @@ class EtsyOrdersCard extends HTMLElement {
       ...config,
       shops: config.shops.map((s) => (typeof s === "string" ? { entity: s } : s)),
     };
-    this._own = config;
     this._selectedShop = this._loadSelectedShop();
-    this._colors = null;
     this._signature = null;
     if (this._hass) this._render();
   }
@@ -346,10 +69,11 @@ class EtsyOrdersCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     const shared = this._sharedColors(hass);
-    const colorsSig = JSON.stringify(shared?.version ?? shared ?? null);
-    if (!this._colors || colorsSig !== this._colorsSig) {
+    // The boxes come drawn with the orders; a new color list or look also changes the styles they need.
+    const colorsSig = JSON.stringify(shared?.version ?? null);
+    if (colorsSig !== this._colorsSig) {
       this._colorsSig = colorsSig;
-      this._colors = new EtsyOrderColors(EtsyOrderColors.merge(shared, this._own));
+      this._colorCss = typeof shared?.css === "string" ? shared.css : "";
       this._signature = null;
     }
     this._shopAccents = shared?.shop_accents || {};
@@ -360,7 +84,7 @@ class EtsyOrdersCard extends HTMLElement {
     }
   }
 
-  // The app's color list, from the first shop sensor that carries it.
+  // The app's color settings (styles and shop accents), from the first shop sensor that carries them.
   _sharedColors(hass) {
     for (const s of this._config.shops) {
       const cc = hass.states[s.entity]?.attributes?.color_config;
@@ -650,18 +374,17 @@ class EtsyOrdersCard extends HTMLElement {
     const price = c.show_prices && o.order_total != null ? `<span class="price">${esc(this._money(o.order_total, o.currency_code))}</span>` : "";
     // The placeholder also appears URL-encoded inside an Android intent's fallback URL.
     const url = orderUrl ? String(orderUrl).replace(/\{receipt_id\}|%7Breceipt_id%7D/g, encodeURIComponent(o.receipt_id)) : null;
-    // A variation pill or personalization note, tinted by the colors it names. A "random" choice
-    // gets the random effect instead, seeded by order and position so it stays put between renders.
-    const box = (tag, cls, text, seed, small, attrs = "") => {
-      const b = this._colors.box(text, `${o.receipt_id}|${seed}`, small);
-      if (!b.style) return `<${tag} class="${cls}"${attrs}>${esc(text)}</${tag}>`;
-      return `<${tag} class="${cls}${b.cls}" style="${esc(b.style)}"${attrs}>${b.inner}${esc(text)}</${tag}>`;
+    // A variation pill or personalization note, drawn as the app sent it (`paint`: extra classes, style and the
+    // markup before the text, such as lava blobs); plain when the app didn't color it.
+    const box = (tag, cls, text, paint, attrs = "") => {
+      if (!paint?.style) return `<${tag} class="${cls}"${attrs}>${esc(text)}</${tag}>`;
+      return `<${tag} class="${cls}${esc(paint.cls || "")}" style="${esc(paint.style)}"${attrs}>${paint.inner || ""}${esc(text)}</${tag}>`;
     };
     const items = (o.items || [])
-      .map((i, ii) => {
-        const vars = (i.variations || []).map((v, vi) => box("span", "var", v.value, `${ii}.${vi}`, true, ` title="${esc(v.property)}"`)).join("");
+      .map((i) => {
+        const vars = (i.variations || []).map((v) => box("span", "var", v.value, v.paint, ` title="${esc(v.property)}"`)).join("");
         const qty = (i.quantity || 1) > 1 ? `<span class="qty">×${i.quantity}</span>` : "";
-        const note = i.personalization ? box("div", "note", i.personalization, `${ii}.note`, false) : "";
+        const note = i.personalization ? box("div", "note", i.personalization, i.personalization_paint) : "";
         const img = i.image_url ? `<img src="${esc(i.image_url)}" alt="" loading="lazy">` : `<div class="noimg"></div>`;
         const units = this._units(i);
         const made = this._made(o, i);
@@ -813,7 +536,9 @@ class EtsyOrdersCard extends HTMLElement {
                border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3)); }
         .note { font-size: 13px; padding: 4px 8px; border-left: 3px solid var(--accent-color, var(--primary-color));
                 border-radius: 4px; background: rgba(127, 127, 127, 0.1); color: var(--primary-text-color); white-space: pre-wrap; }
-        ${EtsyOrderColors.CSS}
+        /* The app's color styles (color_config.css); its tints are mixed with the card's background. */
+        ha-card { --esm-color-base: var(--ha-card-background, var(--card-background-color, #fff)); }
+        ${(this._colorCss || "").replace(/<\//g, "<\\/")}
         /* One switch for every animation on the card (random, metal and any added later): while the card is
            paused (window unfocused or hidden, see _updatePaused) all of them hold their frame, and they resume
            in place. With reduced motion requested, none of them run. */

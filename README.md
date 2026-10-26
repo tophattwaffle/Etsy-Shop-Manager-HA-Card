@@ -25,10 +25,13 @@ shops:
 
 ### Order colors
 
-The color list (`colors`, `metallic`, `random_words`) is managed in the app under **Admin → Order colors** and reaches
-the card through the sensors' `color_config` attribute (integration 0.3.0 or later). The app's Orders page colors with
-the same engine, so both always match. Anything still set in the card's YAML is merged on top (YAML wins per color
-name). The look settings (`color_tint`, `metallic_shine`, `random_style`, animations) stay in the card config.
+Order colors are set only in the app, under **Order colors**: the color list, tint strength, metal shine, the random
+effect and whether effects move. Since card 3.0.0 the app sends each variation and personalization already drawn, with
+the styles in the sensors' `color_config`, so the card shows exactly what the app's Orders page shows and has no color
+options of its own (`colors`, `metallic`, `random_words`, `color_tint`, `metallic_shine`, `animate_metallic`,
+`random_style`, `random_min_brightness` and `animate_random` in the YAML are ignored; remove them). Card 3.0.0 needs an
+app version that sends drawn boxes; with an older app, variations show uncolored. Animations pause while the window is
+unfocused or hidden and don't run when the device asks for reduced motion.
 
 ### Made checkboxes
 

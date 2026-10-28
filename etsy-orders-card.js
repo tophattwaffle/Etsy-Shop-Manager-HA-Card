@@ -1,4 +1,4 @@
-// etsy-orders-card v3.0.0 — open Etsy orders as order cards, most urgent first.
+// etsy-orders-card v3.1.0 — open Etsy orders as order cards, most urgent first.
 //
 // Reads the `open_orders` / `total_items_needed` attributes of the Etsy Shop
 // Manager integration's open-order sensors. Order colors are the app's job
@@ -259,15 +259,26 @@ class EtsyOrdersCard extends HTMLElement {
       : `<div class="empty">🎉 No open orders — nothing to ship.</div>`;
   }
 
+  _addressAlertsBlurb(entries) {
+    const troubled = entries.filter((e) => e.o?.address_alert);
+    if (!troubled.length) return "";
+    const names = troubled.map((e) => esc(e.o.buyer_name || `#${e.o.receipt_id}`));
+    const text = troubled.length === 1
+      ? `Address check issue on order for <b>${names[0]}</b>`
+      : `Address check issues on ${troubled.length} orders: ${names.map((n) => `<b>${n}</b>`).join(", ")}`;
+    return `<div class="address-alerts-blurb"><span class="blurb-icon">⚠️</span><span class="blurb-text">${text}</span></div>`;
+  }
+
   // One section per shop (the default layout).
   _shop(shop) {
     const { st, name, icon } = this._shopInfo(shop);
     if (!st) return `<section class="shop"><div class="shop-head">${icon}<span class="shop-name">${esc(name)}</span></div><div class="empty">Entity not found: ${esc(shop.entity)}</div></section>`;
     const entries = this._byShipBy(this._entries(shop));
     const { chips, makeList } = this._summary(entries, this._itemCount(st, entries.map((e) => e.o)));
+    const alertsBlurb = this._addressAlertsBlurb(entries);
     return `<section class="shop">
       <div class="shop-head">${icon}<span class="shop-name">${esc(name)}</span>${chips}</div>
-      ${makeList}${this._orders(entries, false)}</section>`;
+      ${alertsBlurb}${makeList}${this._orders(entries, false)}</section>`;
   }
 
   // combine_shops: every shop's orders in one list, most urgent first, with a shop picker on top (like the shop list on
@@ -282,6 +293,7 @@ class EtsyOrdersCard extends HTMLElement {
     const entries = this._byShipBy(shown.flatMap((p) => p.entries));
     const items = shown.reduce((n, p) => n + (p.st ? this._itemCount(p.st, p.entries.map((e) => e.o)) : 0), 0);
     const { chips, makeList } = this._summary(entries, items);
+    const alertsBlurb = this._addressAlertsBlurb(entries);
     const total = perShop.reduce((n, p) => n + p.entries.length, 0);
     const current = perShop.find((p) => p.s.entity === selected);
     const choices = [{ value: "", mark: STOREFRONT, name: "All shops", count: total }].concat(
@@ -298,7 +310,7 @@ class EtsyOrdersCard extends HTMLElement {
       <div class="shop-head"><span class="shop-pick-wrap"><button type="button" class="chip shop-pick${this._menuOpen ? " open" : ""}"
         aria-haspopup="listbox" aria-expanded="${this._menuOpen ? "true" : "false"}" aria-label="Shop: ${esc(current ? current.name : "All shops")}"
         title="${esc(current ? current.name : "All shops")}"><span class="mark">${pillMark}</span><svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg></button>${menu}</span>${chips}</div>
-      ${makeList}${missing}${missing && !entries.length ? "" : this._orders(entries, !selected && shops.length > 1)}</section>`;
+      ${alertsBlurb}${makeList}${missing}${missing && !entries.length ? "" : this._orders(entries, !selected && shops.length > 1)}</section>`;
   }
 
   // The device's last shop choice in the combined view (per card, by its shop list); none if storage is off.
@@ -366,6 +378,16 @@ class EtsyOrdersCard extends HTMLElement {
     return shop.order_url !== undefined ? shop.order_url : web;
   }
 
+  _orderAlert(o) {
+    const alert = o.address_alert;
+    if (!alert || !alert.message) return "";
+    const isSug = alert.is_suggestion || alert.severity === "warning";
+    const icon = isSug ? "⚠️" : "🛑";
+    const cls = isSug ? "suggestion" : "error";
+    const suggested = alert.suggested_address ? `<div class="alert-suggested">USPS suggests: ${esc(alert.suggested_address.replace(/\n/g, ", "))}</div>` : "";
+    return `<div class="address-alert ${cls}"><span class="alert-icon">${icon}</span><div class="alert-body"><div class="alert-msg">${esc(alert.message)}</div>${suggested}</div></div>`;
+  }
+
   // shopName: shown on the order in the combined list's "All shops" view.
   _order(o, orderUrl, accent, shopName = null) {
     const c = this._config;
@@ -398,7 +420,7 @@ class EtsyOrdersCard extends HTMLElement {
     const cls = `order${due.urgent ? " urgent" : ""}${accent ? " accent" : ""}`;
     const style = accent ? ` style="--shop: ${esc(accent)}"` : "";
     const open = url ? `<a class="${cls}" href="${esc(url)}"${target}${style}>` : `<div class="${cls}"${style}>`;
-    return `${open}<div class="order-head"><span class="due ${due.cls}" style="${due.style}">${esc(due.text)}</span><span class="buyer">${esc(buyer)}</span>${shopName ? `<span class="order-shop">${esc(shopName)}</span>` : ""}${price}</div>${items}${url ? "</a>" : "</div>"}`;
+    return `${open}<div class="order-head"><span class="due ${due.cls}" style="${due.style}">${esc(due.text)}</span><span class="buyer">${esc(buyer)}</span>${shopName ? `<span class="order-shop">${esc(shopName)}</span>` : ""}${price}</div>${this._orderAlert(o)}${items}${url ? "</a>" : "</div>"}`;
   }
 
   // Units to make of an item, as the app counts them (at least one).
@@ -536,6 +558,27 @@ class EtsyOrdersCard extends HTMLElement {
                border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3)); }
         .note { font-size: 13px; padding: 4px 8px; border-left: 3px solid var(--accent-color, var(--primary-color));
                 border-radius: 4px; background: rgba(127, 127, 127, 0.1); color: var(--primary-text-color); white-space: pre-wrap; }
+        .address-alerts-blurb {
+          display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px;
+          background: rgba(219, 68, 55, 0.15); border: 1px solid rgba(219, 68, 55, 0.4);
+          color: var(--primary-text-color, inherit); font-size: 13px; line-height: 1.4; margin-bottom: 8px;
+        }
+        .address-alerts-blurb .blurb-icon { font-size: 16px; flex: none; }
+        .address-alerts-blurb .blurb-text { flex: 1; }
+        .address-alert {
+          margin: 4px 0 6px 0; padding: 6px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4;
+          display: flex; gap: 8px; align-items: flex-start;
+        }
+        .address-alert.error {
+          background: rgba(219, 68, 55, 0.12); border-left: 3px solid #db4437; color: var(--primary-text-color, inherit);
+        }
+        .address-alert.suggestion {
+          background: rgba(255, 167, 38, 0.12); border-left: 3px solid #ffa726; color: var(--primary-text-color, inherit);
+        }
+        .address-alert .alert-icon { flex: none; font-size: 14px; }
+        .address-alert .alert-body { flex: 1; min-width: 0; }
+        .address-alert .alert-msg { font-weight: 500; }
+        .address-alert .alert-suggested { margin-top: 2px; opacity: 0.9; }
         /* The app's color styles (color_config.css); its tints are mixed with the card's background. */
         ha-card { --esm-color-base: var(--ha-card-background, var(--card-background-color, #fff)); }
         ${(this._colorCss || "").replace(/<\//g, "<\\/")}

@@ -48,3 +48,10 @@ does, instead of a section per shop. A pill on the left of the header picks the 
 (the app's storefront mark for **All shops**, the name for a shop without an icon), and tapping it opens a menu of
 icons, full names and order counts (card v2.9.0). The chips and the "To make" line follow the choice. Under All shops
 each order names its shop, and its outline is the shop's color. The choice is remembered on each device.
+
+### Address verification alerts
+
+Starting with card v3.1.0, orders with active USPS address issues (unrecognized address, missing or unrecognized
+apartment/suite unit, or USPS suggested standardization) show an alert banner on the order card above its items,
+and a summary banner appears between the shop header and the To make list naming any affected orders. Resolving
+the address in the app (applying the USPS suggestion or confirming the address is fine) automatically clears the alert.

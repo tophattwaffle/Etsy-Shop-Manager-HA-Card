@@ -23,6 +23,17 @@ shops:
     name: Shop Two
 ```
 
+### Warm night look
+
+Card 4.0.0 wears the app's "Warm night" look (its Warm night refresh): warm dark greys and Figtree (Segoe UI when the
+font can't load), each shop's header strip and orders washed in the shop's colour with its avatar (initials, or the
+shop's `icon`) and name in that colour, and summary pills for orders, items, the next ship-by and (with `show_prices`)
+the total. Orders have no outline; ship-by pills use the app's four day colours (overdue, today, soon, later, by
+calendar day), so `green_hours` and `red_hours` are no longer used. Colour chips come filled with the filament colour
+and the personalization box runs across the order, filled with its colours and kept readable; that needs an app
+version that sends `paint_filled` (the tinted chips show otherwise). Shop colours come from the app's
+`color_config.shop_tints` (or `shop_accents` from older apps); a shop's `accent` in the YAML still overrides.
+
 ### Order colors
 
 Order colors are set only in the app, under **Order colors**: the color list, tint strength, metal shine, the random
@@ -47,7 +58,7 @@ through, the shop's "To make" line counts only what's left, and tapping the chec
 does, instead of a section per shop. A pill on the left of the header picks the shop: it shows only the shop's `icon`
 (the app's storefront mark for **All shops**, the name for a shop without an icon), and tapping it opens a menu of
 icons, full names and order counts (card v2.9.0). The chips and the "To make" line follow the choice. Under All shops
-each order names its shop, and its outline is the shop's color. The choice is remembered on each device.
+each order names its shop beside a dot in the shop's colour, and is washed in that colour (card 4.0.0). The choice is remembered on each device.
 
 ### Address verification alerts
 

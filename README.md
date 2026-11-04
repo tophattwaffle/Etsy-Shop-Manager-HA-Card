@@ -58,7 +58,7 @@ through, the shop's "To make" line counts only what's left, and tapping the chec
 does, instead of a section per shop. A pill on the left of the header picks the shop: it shows only the shop's `icon`
 (the app's storefront mark for **All shops**, the name for a shop without an icon), and tapping it opens a menu of
 icons, full names and order counts (card v2.9.0). The chips and the "To make" line follow the choice. Under All shops
-each order names its shop, and its outline is the shop's color. The choice is remembered on each device.
+each order names its shop beside a dot in the shop's colour, and is washed in that colour (card 4.0.0). The choice is remembered on each device.
 
 ### Address verification alerts
 

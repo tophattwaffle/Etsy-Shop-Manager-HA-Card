@@ -1,4 +1,4 @@
-// etsy-orders-card v4.0.0 — open Etsy orders as order cards, most urgent first.
+// etsy-orders-card v4.0.1 — open Etsy orders as order cards, most urgent first.
 //
 // Reads the `open_orders` / `total_items_needed` attributes of the Etsy Shop
 // Manager integration's open-order sensors. The card wears the app's "Warm
@@ -48,6 +48,19 @@ const shortTitle = (t) => String(t || "").split("|")[0].trim();
 // The app's brand mark (Material "storefront"), for "All shops" in the combined view's shop picker.
 const STOREFRONT = `<svg class="storefront" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.9,8.89l-1.05-4.37c-0.22-0.9-1-1.52-1.91-1.52H5.05C4.15,3,3.36,3.63,3.15,4.52L2.1,8.89 c-0.24,1.02-0.02,2.06,0.62,2.88C2.8,11.88,2.91,11.96,3,12.06V19c0,1.1,0.9,2,2,2h14c1.1,0,2-0.9,2-2v-6.94 c0.09-0.09,0.2-0.18,0.28-0.28C21.92,10.96,22.15,9.91,21.9,8.89z M18.91,4.99l1.05,4.37c0.1,0.42,0.01,0.84-0.25,1.17 C19.57,10.71,19.27,11,18.77,11c-0.61,0-1.14-0.49-1.21-1.14L16.98,5L18.91,4.99z M13,5h1.96l0.54,4.52 c0.05,0.39-0.07,0.78-0.33,1.07C14.95,10.85,14.63,11,14.22,11C13.55,11,13,10.41,13,9.69V5z M8.49,9.52L9.04,5H11v4.69 C11,10.41,10.45,11,9.71,11c-0.34,0-0.65-0.15-0.89-0.41C8.57,10.3,8.45,9.91,8.49,9.52z M4.04,9.36L5.05,5h1.97L6.44,9.86 C6.36,10.51,5.84,11,5.23,11c-0.49,0-0.8-0.29-0.93-0.47C4.03,10.21,3.94,9.78,4.04,9.36z M5,19v-6.03C5.08,12.98,5.15,13,5.23,13 c0.87,0,1.66-0.36,2.24-0.95c0.6,0.6,1.4,0.95,2.31,0.95c0.87,0,1.65-0.36,2.23-0.93c0.59,0.57,1.39,0.93,2.29,0.93 c0.84,0,1.64-0.35,2.24-0.95c0.58,0.59,1.37,0.95,2.24,0.95c0.08,0,0.15-0.02,0.23-0.03V19H5z"/></svg>`;
 const isAndroid = () => typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent || "");
+const isDesktop = () =>
+  !isAndroid() &&
+  (typeof window === "undefined" || (window.matchMedia?.("(any-hover: hover) and (any-pointer: fine)").matches ?? true));
+const hasFocus = () => {
+  try {
+    if (typeof window !== "undefined" && window.top && window.top !== window && window.top.document) {
+      return window.top.document.hasFocus();
+    }
+  } catch (e) {
+    // Cross-origin parent frame: fall back to this document.
+  }
+  return typeof document !== "undefined" ? document.hasFocus() : true;
+};
 // Figtree, the app's typeface. Fonts declared inside a shadow root don't load, so the stylesheet goes in the page once.
 const FONT_URL = "https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap";
 // A shop's initials for its avatar: its capitals ("MakerHexWorks" → "MH"), else its first two letters.
@@ -125,23 +138,32 @@ class EtsyOrdersCard extends HTMLElement {
     // Animations (random and metal alike) only move while the window has focus; pausing (not stopping)
     // resumes them in place. The "paused" class on ha-card is the single switch the CSS uses for all of them.
     // document.hasFocus() reads false in the Companion app's WebView until something is tapped,
-    // so it only decides the starting state on mouse-driven (desktop) devices; touch devices
-    // start unpaused and rely on blur/focus events and visibility.
+    // so it is only checked on mouse-driven (desktop) devices; touch devices start unpaused and
+    // rely on blur/focus events and visibility.
     this._onWindowFocus = (e) => {
-      this._blurred = e.type === "blur";
+      this._blurred = e.type === "blur" || (isDesktop() && !hasFocus());
       this._updatePaused();
     };
     this._onVisibility = () => {
-      // Coming back to the app or tab doesn't always send a focus event, so visible counts as focused.
-      if (!document.hidden) this._blurred = false;
+      // Coming back to the Companion app doesn't always send a focus event; on desktop, check actual window focus
+      // so an unfocused window uncovered in the background stays paused.
+      if (!document.hidden) this._blurred = isDesktop() ? !hasFocus() : false;
       this._updatePaused();
     };
-    const desktop = window.matchMedia?.("(hover: hover) and (pointer: fine)").matches;
-    this._blurred = desktop ? !document.hasFocus() : false;
+    this._blurred = isDesktop() ? !hasFocus() : false;
     window.addEventListener("focus", this._onWindowFocus);
     window.addEventListener("blur", this._onWindowFocus);
     // A tap or click means the page is in use, even where the WebView sends no focus event.
     window.addEventListener("pointerdown", this._onWindowFocus);
+    try {
+      if (window.top && window.top !== window) {
+        window.top.addEventListener("focus", this._onWindowFocus);
+        window.top.addEventListener("blur", this._onWindowFocus);
+        window.top.addEventListener("pointerdown", this._onWindowFocus);
+      }
+    } catch (e) {
+      // Cross-origin parent frame.
+    }
     // A tap anywhere outside the card closes its shop menu.
     this._onOutside = (e) => {
       if (this._menuOpen && !e.composedPath().includes(this)) {
@@ -159,12 +181,26 @@ class EtsyOrdersCard extends HTMLElement {
     window.removeEventListener("focus", this._onWindowFocus);
     window.removeEventListener("blur", this._onWindowFocus);
     window.removeEventListener("pointerdown", this._onWindowFocus);
+    try {
+      if (window.top && window.top !== window) {
+        window.top.removeEventListener("focus", this._onWindowFocus);
+        window.top.removeEventListener("blur", this._onWindowFocus);
+        window.top.removeEventListener("pointerdown", this._onWindowFocus);
+      }
+    } catch (e) {
+      // Cross-origin parent frame.
+    }
     document.removeEventListener("pointerdown", this._onOutside);
     document.removeEventListener("visibilitychange", this._onVisibility);
   }
 
   _updatePaused() {
-    const paused = document.hidden || this._blurred;
+    if (typeof document !== "undefined" && isDesktop() && !hasFocus()) {
+      this._blurred = true;
+    } else if (this._blurred === undefined) {
+      this._blurred = false;
+    }
+    const paused = Boolean((typeof document !== "undefined" && document.hidden) || this._blurred);
     if (paused && !this._pausedAt) this._pausedAt = Date.now();
     if (!paused && this._pausedAt) {
       this._pausedTotal = (this._pausedTotal || 0) + Date.now() - this._pausedAt;
@@ -177,7 +213,7 @@ class EtsyOrdersCard extends HTMLElement {
   // Animation clock: wall time minus time spent paused. Each re-render starts the animation at
   // this point, so it carries on where it was instead of jumping to wall-clock time.
   _animClock() {
-    return Date.now() - (this._pausedTotal || 0) - (this._pausedAt ? Date.now() - this._pausedAt : 0);
+    return (this._pausedAt ?? Date.now()) - (this._pausedTotal || 0);
   }
 
   // The ship-by pill: the time to go ("2d 5h", "5h 12m", "40m", "… late") and its kind by calendar day, as the app
@@ -521,6 +557,7 @@ class EtsyOrdersCard extends HTMLElement {
       this.shadowRoot.addEventListener("click", (e) => this._onClick(e));
       this.shadowRoot.addEventListener("keydown", (e) => this._onKeyDown(e));
     }
+    this._updatePaused();
     this.shadowRoot.innerHTML = `
       <style>
         /* Warm night, the app's look: warm dark greys, Figtree, every border an even hairline. Its colours are the

@@ -66,3 +66,9 @@ Starting with card v3.1.0, orders with active USPS address issues (unrecognized 
 apartment/suite unit, or USPS suggested standardization) show an alert banner on the order card above its items,
 and a summary banner appears between the shop header and the To make list naming any affected orders. Resolving
 the address in the app (applying the USPS suggestion or confirming the address is fine) automatically clears the alert.
+
+### Replacement orders
+
+Starting with card v4.1.0, local replacement orders created in Etsy Shop Manager (`is_replacement: true`) show a
+`Replacement` badge beside the buyer's name, link to the original Etsy order (`replaces_receipt_id`) when tapped, and
+sync their Made checkboxes and To make counts with the app like any other open order.

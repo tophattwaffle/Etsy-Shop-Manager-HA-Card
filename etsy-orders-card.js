@@ -1,4 +1,4 @@
-// etsy-orders-card v4.0.1 — open Etsy orders as order cards, most urgent first.
+// etsy-orders-card v4.1.0 — open Etsy orders as order cards, most urgent first.
 //
 // Reads the `open_orders` / `total_items_needed` attributes of the Etsy Shop
 // Manager integration's open-order sensors. The card wears the app's "Warm
@@ -33,7 +33,8 @@
 //                      its shop. Give each shop an icon for the pill.
 //                      (default false: a section per shop)
 //   order_url:         link for each order; "{receipt_id}" is substituted
-//                      (default Etsy's sold-orders page). Set false to disable.
+//                      (replaces_receipt_id on replacement orders; default
+//                      Etsy's sold-orders page). Set false to disable.
 //                      A non-http scheme (e.g. "microsoft-edge:https://…")
 //                      hands the link to another browser via the OS.
 // Ship-by pills count calendar days as the app does: overdue, today, soon (the
@@ -327,7 +328,7 @@ class EtsyOrdersCard extends HTMLElement {
   _addressAlertsBlurb(entries) {
     const troubled = entries.filter((e) => e.o?.address_alert);
     if (!troubled.length) return "";
-    const names = troubled.map((e) => esc(e.o.buyer_name || `#${e.o.receipt_id}`));
+    const names = troubled.map((e) => esc(e.o.buyer_name || `#${e.o.replaces_receipt_id || e.o.receipt_id}`));
     const text = troubled.length === 1
       ? `Address check issue on order for <b>${names[0]}</b>`
       : `Address check issues on ${troubled.length} orders: ${names.map((n) => `<b>${n}</b>`).join(", ")}`;
@@ -460,10 +461,14 @@ class EtsyOrdersCard extends HTMLElement {
   _order(o, orderUrl, tint, shopName = null) {
     const c = this._config;
     const due = this._due(o.ship_by_ts);
-    const buyer = (o.buyer_name || "").trim() || `#${o.receipt_id}`;
+    const displayReceiptId = o.replaces_receipt_id || o.receipt_id;
+    const rawBuyer = (o.buyer_name || "").trim();
+    const cleanBuyer = o.is_replacement ? rawBuyer.replace(/\s*\(Replacement\)$/i, "").trim() : rawBuyer;
+    const buyer = cleanBuyer || `#${displayReceiptId}`;
+    const replacement = o.is_replacement ? `<span class="tag replacement">Replacement</span>` : "";
     const price = c.show_prices && o.order_total != null ? `<span class="price">${esc(this._money(o.order_total, o.currency_code))}</span>` : "";
     // The placeholder also appears URL-encoded inside an Android intent's fallback URL.
-    const url = orderUrl ? String(orderUrl).replace(/\{receipt_id\}|%7Breceipt_id%7D/g, encodeURIComponent(o.receipt_id)) : null;
+    const url = orderUrl ? String(orderUrl).replace(/\{receipt_id\}|%7Breceipt_id%7D/g, encodeURIComponent(displayReceiptId)) : null;
     // A variation chip or personalization box, drawn as the app sent it (its filled look when the app sends it, else
     // the tinted one: extra classes, style and the markup before the text, such as lava blobs); null when uncoloured.
     const box = (tag, cls, text, paint, attrs = "") => {
@@ -494,7 +499,7 @@ class EtsyOrdersCard extends HTMLElement {
     const style = this._tintStyle(tint);
     const open = url ? `<a class="${cls}" href="${esc(url)}"${target}${style}>` : `<div class="${cls}"${style}>`;
     const shop = shopName ? `<span class="order-shop"><span class="dot" aria-hidden="true"></span>${esc(shopName)}</span>` : "";
-    return `${open}<div class="order-head"><span class="due k-${due.kind}">${esc(due.text)}</span><span class="buyer">${esc(buyer)}</span>${shop}${price}</div>${this._orderAlert(o)}${items}${url ? "</a>" : "</div>"}`;
+    return `${open}<div class="order-head"><span class="due k-${due.kind}">${esc(due.text)}</span><span class="buyer-wrap"><span class="buyer">${esc(buyer)}</span>${replacement}</span>${shop}${price}</div>${this._orderAlert(o)}${items}${url ? "</a>" : "</div>"}`;
   }
 
   // Units to make of an item, as the app counts them (at least one).
@@ -622,7 +627,11 @@ class EtsyOrdersCard extends HTMLElement {
         a.order:hover { background: var(--wn-raised); }
         a.order.tinted:hover { background: color-mix(in srgb, var(--shop) 12%, var(--wn-paper)); }
         .order-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
-        .buyer { flex: 1; min-width: 0; font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .buyer-wrap { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+        .buyer { min-width: 0; font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tag { display: inline-flex; align-items: center; flex: none; height: 22px; padding: 0 9px; border-radius: 11px; font-size: 12px;
+               font-weight: 600; white-space: nowrap; background: var(--wn-raised); color: var(--wn-secondary); }
+        .tag.replacement { background: #16373b; color: #9ce0e6; }
         .order-shop { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--wn-secondary); white-space: nowrap; }
         .order-shop .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--shop, var(--wn-muted)); }
         .price { flex: none; font-size: 13px; color: var(--wn-secondary); }

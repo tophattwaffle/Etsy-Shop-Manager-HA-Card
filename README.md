@@ -67,6 +67,13 @@ apartment/suite unit, or USPS suggested standardization) show an alert banner on
 and a summary banner appears between the shop header and the To make list naming any affected orders. Resolving
 the address in the app (applying the USPS suggestion or confirming the address is fine) automatically clears the alert.
 
+### Split items and several personalizations
+
+Starting with card v4.2.0, an item the app split into pieces shows each piece as its own row with a `Piece 1`,
+`Piece 2` tag beside the title and its own Made checkbox (the checkbox needs integration 0.6.1 or later). When a buyer
+answered several personalization questions, each answer gets its own box, colored as the app drew it
+(`personalizations`, `personalizations_paint_filled`); older apps keep the single box.
+
 ### Replacement orders
 
 Starting with card v4.1.0, local replacement orders created in Etsy Shop Manager (`is_replacement: true`) show a

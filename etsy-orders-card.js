@@ -1,4 +1,4 @@
-// etsy-orders-card v4.1.0 — open Etsy orders as order cards, most urgent first.
+// etsy-orders-card v4.2.0 — open Etsy orders as order cards, most urgent first.
 //
 // Reads the `open_orders` / `total_items_needed` attributes of the Etsy Shop
 // Manager integration's open-order sensors. The card wears the app's "Warm
@@ -482,15 +482,13 @@ class EtsyOrdersCard extends HTMLElement {
             ?? `<span class="var" title="${esc(v.property)}">${esc(v.value)}</span>`)
           .join("");
         const qty = (i.quantity || 1) > 1 ? `<span class="qty">×${i.quantity}</span>` : "";
-        const note = i.personalization
-          ? box("div", "note", i.personalization, i.personalization_paint_filled || i.personalization_paint)
-            ?? `<div class="note plain"><span class="note-label">Personalization</span> · ${esc(i.personalization)}</div>`
-          : "";
+        const note = this._notes(i, box);
+        const piece = this._piece(i);
         const img = i.image_url ? `<img src="${esc(i.image_url)}" alt="" loading="lazy">` : `<div class="noimg"></div>`;
         const units = this._units(i);
         const made = this._made(o, i);
         const done = made >= units;
-        return `<div class="item${done && this._canMark(i) ? " made" : ""}"><div class="item-row">${img}<div class="item-body"><div class="title">${qty}${esc(shortTitle(i.title))}</div>${vars ? `<div class="vars">${vars}</div>` : ""}</div>${this._madeButton(o, i, units, made)}</div>${note}</div>`;
+        return `<div class="item${done && this._canMark(i) ? " made" : ""}"><div class="item-row">${img}<div class="item-body"><div class="title">${qty}${esc(shortTitle(i.title))}${piece}</div>${vars ? `<div class="vars">${vars}</div>` : ""}</div>${this._madeButton(o, i, units, made)}</div>${note}</div>`;
       })
       .join("");
     // Only web links get a new tab; an OS handler link (another browser) would leave a blank one behind.
@@ -500,6 +498,27 @@ class EtsyOrdersCard extends HTMLElement {
     const open = url ? `<a class="${cls}" href="${esc(url)}"${target}${style}>` : `<div class="${cls}"${style}>`;
     const shop = shopName ? `<span class="order-shop"><span class="dot" aria-hidden="true"></span>${esc(shopName)}</span>` : "";
     return `${open}<div class="order-head"><span class="due k-${due.kind}">${esc(due.text)}</span><span class="buyer-wrap"><span class="buyer">${esc(buyer)}</span>${replacement}</span>${shop}${price}</div>${this._orderAlert(o)}${items}${url ? "</a>" : "</div>"}`;
+  }
+
+  // An item's personalization. With several answers (the app's `personalizations`, one per question the buyer
+  // answered) each gets its own box, drawn as the app sent it (`personalizations_paint_filled`, else
+  // `personalizations_paint`); with one answer, or an app from before that list, the single `personalization` box.
+  _notes(i, box) {
+    const plain = (text) => `<div class="note plain"><span class="note-label">Personalization</span> · ${esc(text)}</div>`;
+    const list = Array.isArray(i.personalizations) ? i.personalizations.filter((t) => typeof t === "string" && t) : [];
+    if (list.length > 1 && list.length === (i.personalizations || []).length) {
+      const filled = i.personalizations_paint_filled || [];
+      const tinted = i.personalizations_paint || [];
+      return list.map((text, n) => box("div", "note", text, filled[n] || tinted[n]) ?? plain(text)).join("");
+    }
+    if (!i.personalization) return "";
+    return box("div", "note", i.personalization, i.personalization_paint_filled || i.personalization_paint) ?? plain(i.personalization);
+  }
+
+  // "Piece 2" beside the title when the app split the item into pieces (their ids end in "-1", "-2", ...).
+  _piece(i) {
+    const m = /^\d+-(\d+)$/.exec(String(i.transaction_id ?? ""));
+    return m ? `<span class="piece" title="The app split this item into pieces">Piece ${Number(m[1])}</span>` : "";
   }
 
   // Units to make of an item, as the app counts them (at least one).
@@ -649,6 +668,9 @@ class EtsyOrdersCard extends HTMLElement {
         .note { display: block; font-size: 13px; font-weight: 600; line-height: 1.4; padding: 7px 11px; border-radius: 8px;
                 border: 1px solid var(--wn-line); background: var(--wn-raised); color: var(--wn-ink); white-space: pre-wrap; }
         .note.plain { font-weight: 400; }
+        .note + .note { margin-top: 6px; }
+        .piece { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 8px; font-weight: 600; font-size: 11px;
+          color: var(--wn-muted); border: 1px solid currentColor; vertical-align: 1px; white-space: nowrap; }
         .note-label { color: var(--wn-muted); }
         /* Made checkbox: a box that fills in the success colour; partly made items show the count beside it. */
         .made-btn { flex: none; display: inline-flex; align-items: center; gap: 4px; align-self: center; margin: -4px -4px -4px 0;

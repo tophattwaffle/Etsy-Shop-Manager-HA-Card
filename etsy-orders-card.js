@@ -1,4 +1,4 @@
-// etsy-orders-card v4.2.0 — open Etsy orders as order cards, most urgent first.
+// etsy-orders-card v4.3.0 — open Etsy orders as order cards, most urgent first.
 //
 // Reads the `open_orders` / `total_items_needed` attributes of the Etsy Shop
 // Manager integration's open-order sensors. The card wears the app's "Warm
@@ -335,13 +335,25 @@ class EtsyOrdersCard extends HTMLElement {
     return `<div class="address-alerts-blurb"><span class="blurb-icon">⚠️</span><span class="blurb-text">${text}</span></div>`;
   }
 
+  // The same summary for the app's personalization checks (a rule an order's personalization fails, or an item that
+  // looks like it should be split into pieces).
+  _personalizationAlertsBlurb(entries) {
+    const troubled = entries.filter((e) => e.o?.personalization_alert?.message);
+    if (!troubled.length) return "";
+    const names = troubled.map((e) => esc(e.o.buyer_name || `#${e.o.replaces_receipt_id || e.o.receipt_id}`));
+    const text = troubled.length === 1
+      ? `Personalization to check on order for <b>${names[0]}</b>`
+      : `Personalization to check on ${troubled.length} orders: ${names.map((n) => `<b>${n}</b>`).join(", ")}`;
+    return `<div class="address-alerts-blurb"><span class="blurb-icon">✏️</span><span class="blurb-text">${text}</span></div>`;
+  }
+
   // One section per shop (the default layout): a header strip in the shop's colour, the To make row, the orders.
   _shop(shop) {
     const { st, name, avatar, tint } = this._shopInfo(shop);
     if (!st) return `<section class="shop"><div class="shop-head">${avatar}<span class="shop-name">${esc(name)}</span></div><div class="empty">Entity not found: ${esc(shop.entity)}</div></section>`;
     const entries = this._byShipBy(this._entries(shop));
     const { pills, makeList } = this._summary(entries, this._itemCount(st, entries.map((e) => e.o)));
-    const alertsBlurb = this._addressAlertsBlurb(entries);
+    const alertsBlurb = this._addressAlertsBlurb(entries) + this._personalizationAlertsBlurb(entries);
     return `<section class="shop"${this._tintStyle(tint)}>
       <div class="shop-head${tint ? " tinted" : ""}">${avatar}<span class="shop-name">${esc(name)}</span>${pills}</div>
       ${alertsBlurb}${makeList}${this._orders(entries, false)}</section>`;
@@ -359,7 +371,7 @@ class EtsyOrdersCard extends HTMLElement {
     const entries = this._byShipBy(shown.flatMap((p) => p.entries));
     const items = shown.reduce((n, p) => n + (p.st ? this._itemCount(p.st, p.entries.map((e) => e.o)) : 0), 0);
     const { pills, makeList } = this._summary(entries, items);
-    const alertsBlurb = this._addressAlertsBlurb(entries);
+    const alertsBlurb = this._addressAlertsBlurb(entries) + this._personalizationAlertsBlurb(entries);
     const total = perShop.reduce((n, p) => n + p.entries.length, 0);
     const current = perShop.find((p) => p.s.entity === selected);
     const choices = [{ value: "", mark: STOREFRONT, name: "All shops", count: total, tint: null }].concat(
@@ -455,6 +467,14 @@ class EtsyOrdersCard extends HTMLElement {
     return `<div class="address-alert ${cls}"><span class="alert-icon">${icon}</span><div class="alert-body"><div class="alert-msg">${esc(alert.message)}</div>${suggested}</div></div>`;
   }
 
+  // The app's personalization check on the order: a failed rule (error), or a split it suggests (warning).
+  _personalizationAlert(o) {
+    const alert = o.personalization_alert;
+    if (!alert || !alert.message) return "";
+    const warn = alert.severity === "warning";
+    return `<div class="address-alert ${warn ? "suggestion" : "error"}"><span class="alert-icon">${warn ? "✂️" : "✏️"}</span><div class="alert-body"><div class="alert-msg">${esc(alert.message)}</div></div></div>`;
+  }
+
   // One order: its ship-by pill and buyer, then each item (photo, title, colour chips, Made) with its personalization
   // across the row below. The row is washed in its shop's colour, with no outline (as on the app's Orders page).
   // shopName: shown on the order in the combined list's "All shops" view.
@@ -497,7 +517,7 @@ class EtsyOrdersCard extends HTMLElement {
     const style = this._tintStyle(tint);
     const open = url ? `<a class="${cls}" href="${esc(url)}"${target}${style}>` : `<div class="${cls}"${style}>`;
     const shop = shopName ? `<span class="order-shop"><span class="dot" aria-hidden="true"></span>${esc(shopName)}</span>` : "";
-    return `${open}<div class="order-head"><span class="due k-${due.kind}">${esc(due.text)}</span><span class="buyer-wrap"><span class="buyer">${esc(buyer)}</span>${replacement}</span>${shop}${price}</div>${this._orderAlert(o)}${items}${url ? "</a>" : "</div>"}`;
+    return `${open}<div class="order-head"><span class="due k-${due.kind}">${esc(due.text)}</span><span class="buyer-wrap"><span class="buyer">${esc(buyer)}</span>${replacement}</span>${shop}${price}</div>${this._orderAlert(o)}${this._personalizationAlert(o)}${items}${url ? "</a>" : "</div>"}`;
   }
 
   // An item's personalization. With several answers (the app's `personalizations`, one per question the buyer

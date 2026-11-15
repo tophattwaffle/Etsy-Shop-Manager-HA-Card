@@ -67,6 +67,13 @@ apartment/suite unit, or USPS suggested standardization) show an alert banner on
 and a summary banner appears between the shop header and the To make list naming any affected orders. Resolving
 the address in the app (applying the USPS suggestion or confirming the address is fine) automatically clears the alert.
 
+### Personalization alerts
+
+Starting with card v4.3.0, an order whose personalization fails one of the app's personalization rules, or holds an
+item the app suggests splitting into pieces, shows the app's message on the order card above its items (red for a
+failed rule, amber for a suggested split), and a summary banner under the shop header names the affected orders.
+Fixing the personalization, splitting the item, or choosing "Looks fine" or "Keep together" in the app clears it.
+
 ### Split items and several personalizations
 
 Starting with card v4.2.0, an item the app split into pieces shows each piece as its own row with a `Piece 1`,
